@@ -1,7 +1,7 @@
 Copies of SDKs.  Copyright is reserved by their respective owners.
 
 ZWO Camera SDK link: `https://dl.zwoastro.com/software?app=DeveloperCameraSdk&platform=windows86&region=Overseas`
-  V1.39 2025-08-21 as of 20251008
+  \nV1.39 2025-08-21 as of 20251008
 
 ZWO Focuser SDK link: `https://dl.zwoastro.com/software?app=DeveloperEafSdk&platform=windows86&region=Overseas`
   V1.6 2023-04-12 as of 20251008
