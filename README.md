@@ -11,4 +11,6 @@ The test files are ... exactly that.
 
 The markdown files provide overview and additional info.
 
+ASCOM/Alpaca api description link: https://ascom-standards.org/api/
+
 mconsidine
