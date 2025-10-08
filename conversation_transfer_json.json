@@ -1,0 +1,376 @@
+{
+  "project": {
+    "name": "OnStepX Alpaca Bridge",
+    "goal": "Build ASCOM Alpaca REST API bridge for OnStepX telescope mount on Raspberry Pi",
+    "status": "Complete server implementation with 60+ endpoints"
+  },
+  "architecture": {
+    "flow": "Computer (Alpaca Client) → Network → Raspberry Pi (Flask Server) → USB Serial → OnStepX Mount",
+    "platform": "Raspberry Pi",
+    "server": {
+      "framework": "Flask (Python 3)",
+      "port": 5555,
+      "host": "0.0.0.0",
+      "interface": "ITelescope V4 (ASCOM Platform 7)"
+    },
+    "communication": {
+      "protocol": "LX200-compatible",
+      "serial_port": "/dev/ttyUSB0",
+      "baud_rate": 9600,
+      "timeout": 2
+    }
+  },
+  "completed_work": {
+    "build_issues_resolved": [
+      {
+        "issue": "Pi-gen chpasswd failure in chroot environment",
+        "solution": "Use usermod -p '$(openssl passwd -6 alpacapi)' alpacapi",
+        "context": "PAM doesn't work in chroot, need pre-encrypted password"
+      },
+      {
+        "issue": "Container pigen_work already exists",
+        "solution": "Set CONTINUE=1 env var OR docker rm -fv pigen_work && sudo rm -rf work/",
+        "recommendation": "Clean rebuild preferred for reliability"
+      }
+    ],
+    "server_implementation": {
+      "file": "onstepx_alpaca.py",
+      "dependencies": ["flask", "pyserial"],
+      "endpoints_count": 60,
+      "categories": [
+        {
+          "name": "Management API",
+          "endpoints": [
+            "/management/apiversions",
+            "/management/v1/description",
+            "/management/v1/configureddevices"
+          ]
+        },
+        {
+          "name": "Common Device Properties",
+          "endpoints": [
+            "connected (GET/PUT)",
+            "connecting (GET)",
+            "description (GET)",
+            "driverinfo (GET)",
+            "driverversion (GET)",
+            "interfaceversion (GET) - returns 4",
+            "name (GET)",
+            "supportedactions (GET)",
+            "devicestate (GET)"
+          ]
+        },
+        {
+          "name": "Telescope Properties",
+          "properties": [
+            "alignmentmode", "altitude", "aperturearea", "aperturediameter",
+            "athome", "atpark", "azimuth", "declination", "declinationrate",
+            "doesrefraction", "equatorialsystem", "focallength",
+            "guideratedeclination", "guideraterightascension", "ispulseguiding",
+            "rightascension", "rightascensionrate", "sideofpier", "siderealtime",
+            "siteelevation", "sitelatitude", "sitelongitude", "slewing",
+            "slewsettletime", "targetdeclination", "targetrightascension",
+            "tracking", "trackingrate", "trackingrates", "utcdate"
+          ],
+          "capabilities": [
+            "canfindhome", "canpark", "canpulseguide", "cansetdeclinationrate",
+            "cansetguiderates", "cansetpark", "cansetpierside",
+            "cansetrightascensionrate", "cansettracking", "canslew",
+            "canslewaltaz", "canslewaltazasync", "canslewasync",
+            "cansync", "cansyncaltaz", "canunpark"
+          ]
+        },
+        {
+          "name": "Telescope Methods",
+          "methods": [
+            "abortslew (PUT)",
+            "axisrates (GET)",
+            "canmoveaxis (GET)",
+            "destinationsideofpier (GET)",
+            "findhome (PUT)",
+            "moveaxis (PUT)",
+            "park (PUT)",
+            "pulseguide (PUT)",
+            "setpark (PUT)",
+            "slewtoaltazasync (PUT)",
+            "slewtocoordinatesasync (PUT)",
+            "slewtotargetasync (PUT)",
+            "synctoaltaz (PUT)",
+            "synctocoordinates (PUT)",
+            "synctotarget (PUT)",
+            "unpark (PUT)",
+            "connect (PUT) - Platform 7",
+            "disconnect (PUT) - Platform 7"
+          ]
+        }
+      ]
+    },
+    "onstepx_commands": {
+      "position": {
+        "get_ra": ":GR#",
+        "get_dec": ":GD#",
+        "get_altitude": ":GA#",
+        "get_azimuth": ":GZ#",
+        "get_sidereal_time": ":GS#",
+        "get_pier_side": ":Gm#"
+      },
+      "slew": {
+        "set_target_ra": ":SrHH:MM:SS#",
+        "set_target_dec": ":SdsDD*MM:SS#",
+        "slew_to_target": ":MS#",
+        "slew_to_altaz": ":MA#",
+        "stop": ":Q#"
+      },
+      "tracking": {
+        "enable": ":Te#",
+        "disable": ":Td#",
+        "get_status": ":GT#",
+        "set_sidereal": ":TQ#",
+        "set_lunar": ":TL#",
+        "set_solar": ":TS#"
+      },
+      "park": {
+        "park": ":hP#",
+        "unpark": ":hR#",
+        "find_home": ":hF#",
+        "set_park_position": ":hQ#"
+      },
+      "guide": {
+        "north": ":Mgn#####",
+        "south": ":Mgs#####",
+        "east": ":Mge#####",
+        "west": ":Mgw#####"
+      },
+      "sync": {
+        "sync_to_target": ":CM#"
+      },
+      "site": {
+        "get_latitude": ":Gt#",
+        "get_longitude": ":Gg#",
+        "set_latitude": ":StsDD*MM:SS#",
+        "set_longitude": ":SgDDD*MM:SS#"
+      },
+      "info": {
+        "get_product": ":GVP#"
+      }
+    },
+    "systemd_service": {
+      "file": "/etc/systemd/system/onstepx-alpaca.service",
+      "user": "pi",
+      "working_directory": "/home/pi/onstepx-alpaca",
+      "auto_start": true,
+      "restart": "always",
+      "commands": {
+        "enable": "sudo systemctl enable onstepx-alpaca",
+        "start": "sudo systemctl start onstepx-alpaca",
+        "status": "sudo systemctl status onstepx-alpaca",
+        "logs": "sudo journalctl -u onstepx-alpaca -f"
+      }
+    },
+    "design_decisions": {
+      "protocol": "LX200-compatible (not native OnStepX extended)",
+      "alignment_mode": "algGermanPolar (GEM assumed)",
+      "coordinate_system": "equJ2000",
+      "thread_safety": "Mutex lock on serial communication",
+      "slewing_detection": "Limited - OnStepX :D# command unreliable",
+      "error_handling": "Basic - returns ASCOM error codes",
+      "storage": "No localStorage - server-side only"
+    }
+  },
+  "not_implemented": {
+    "other_ascom_devices": [
+      "Camera - CCD/CMOS imaging",
+      "Dome - Observatory dome control",
+      "Focuser - Electronic focuser",
+      "FilterWheel - Filter wheel control",
+      "Rotator - Camera/instrument rotator",
+      "Switch - Controllable switches (power, heaters)",
+      "ObservingConditions - Weather/environmental sensors",
+      "SafetyMonitor - Safety monitoring",
+      "CoverCalibrator - Telescope covers and flat field"
+    ],
+    "telescope_features": [
+      "Advanced slewing detection (OnStepX limitation)",
+      "Rate discovery for MoveAxis (returns fixed range)",
+      "Full date/time parsing from mount",
+      "Error recovery and auto-reconnect",
+      "Configuration persistence",
+      "Advanced pier flip control",
+      "Multiple device instances",
+      "UDP discovery protocol",
+      "Action()/CommandString/CommandBool/CommandBlind methods",
+      "Authentication and security",
+      "Client tracking and queueing",
+      "Transaction logging"
+    ],
+    "onstepx_specific_features": [
+      "PEC (Periodic Error Correction)",
+      "Autoguide configuration (ST4 settings)",
+      "Alignment model management (multi-star)",
+      "Mount configuration (gear ratios, backlash, limits)",
+      "WiFi/Network settings",
+      "Firmware updates",
+      "Auxiliary outputs (dew heaters, fans)"
+    ]
+  },
+  "installation": {
+    "dependencies": {
+      "system": [
+        "python3",
+        "python3-pip",
+        "python3-venv",
+        "python3-serial"
+      ],
+      "python": [
+        "flask",
+        "pyserial"
+      ]
+    },
+    "setup_steps": [
+      "mkdir -p ~/onstepx-alpaca",
+      "cd ~/onstepx-alpaca",
+      "python3 -m venv venv",
+      "source venv/bin/activate",
+      "pip install flask pyserial",
+      "# Create onstepx_alpaca.py",
+      "sudo usermod -a -G dialout $USER",
+      "# Create systemd service",
+      "sudo systemctl daemon-reload",
+      "sudo systemctl enable onstepx-alpaca",
+      "sudo systemctl start onstepx-alpaca"
+    ],
+    "file_locations": {
+      "server": "/home/pi/onstepx-alpaca/onstepx_alpaca.py",
+      "venv": "/home/pi/onstepx-alpaca/venv/",
+      "service": "/etc/systemd/system/onstepx-alpaca.service"
+    }
+  },
+  "testing": {
+    "get_ip": "hostname -I",
+    "example_commands": [
+      {
+        "description": "Get server description",
+        "command": "curl http://192.168.1.100:5555/management/v1/description"
+      },
+      {
+        "description": "Connect to mount",
+        "command": "curl -X PUT -d 'Connected=true' http://192.168.1.100:5555/api/v1/telescope/0/connected"
+      },
+      {
+        "description": "Get Right Ascension",
+        "command": "curl http://192.168.1.100:5555/api/v1/telescope/0/rightascension"
+      },
+      {
+        "description": "Get Declination",
+        "command": "curl http://192.168.1.100:5555/api/v1/telescope/0/declination"
+      },
+      {
+        "description": "Slew to coordinates",
+        "command": "curl -X PUT -d 'RightAscension=10.5&Declination=45.0' http://192.168.1.100:5555/api/v1/telescope/0/slewtocoordinatesasync"
+      },
+      {
+        "description": "Get tracking status",
+        "command": "curl http://192.168.1.100:5555/api/v1/telescope/0/tracking"
+      },
+      {
+        "description": "Enable tracking",
+        "command": "curl -X PUT -d 'Tracking=true' http://192.168.1.100:5555/api/v1/telescope/0/tracking"
+      },
+      {
+        "description": "Park mount",
+        "command": "curl -X PUT http://192.168.1.100:5555/api/v1/telescope/0/park"
+      }
+    ]
+  },
+  "technical_notes": {
+    "serial_communication": {
+      "port_detection": "Auto-detect /dev/ttyUSB* or /dev/ttyACM*, fallback to /dev/ttyUSB0",
+      "baud_rate": 9600,
+      "timeout": 2,
+      "protocol": "LX200 - Commands and responses end with #"
+    },
+    "coordinate_formats": {
+      "ra": "HH:MM:SS (hours)",
+      "dec": "sDD*MM:SS (signed degrees, * separator)",
+      "altitude": "sDD*MM:SS",
+      "azimuth": "DDD*MM:SS"
+    },
+    "mount_requirements": {
+      "tracking_for_slew": "Tracking must be enabled for RA/Dec slews",
+      "pier_side": "E=East, W=West (GEM only)",
+      "coordinate_system": "J2000 equatorial"
+    },
+    "alpaca_specifics": {
+      "error_codes": {
+        "1031": "Not connected",
+        "1025": "Invalid operation or not implemented"
+      },
+      "transaction_ids": "Client and server transaction IDs in every response",
+      "http_methods": "GET for read, PUT for write",
+      "content_type": "application/x-www-form-urlencoded for PUT parameters"
+    }
+  },
+  "next_steps": {
+    "options": [
+      {
+        "priority": 1,
+        "task": "Add Focuser device support",
+        "effort": "Medium",
+        "description": "Implement IFocuser interface for OnStepX auxiliary focuser control"
+      },
+      {
+        "priority": 2,
+        "task": "Implement UDP discovery protocol",
+        "effort": "Medium",
+        "description": "Allow Alpaca clients to auto-discover server on network"
+      },
+      {
+        "priority": 3,
+        "task": "Add web UI for configuration",
+        "effort": "Medium",
+        "description": "Web interface for mount settings, testing, diagnostics"
+      },
+      {
+        "priority": 4,
+        "task": "Improve slewing detection",
+        "effort": "High",
+        "description": "Implement reliable slewing state detection using OnStepX polling"
+      },
+      {
+        "priority": 5,
+        "task": "Add authentication",
+        "effort": "Medium",
+        "description": "Implement API key or basic auth for security"
+      },
+      {
+        "priority": 6,
+        "task": "Expose OnStepX features via Action()",
+        "effort": "Low",
+        "description": "PEC, alignment models, auxiliary controls via Action method"
+      },
+      {
+        "priority": 7,
+        "task": "Multi-mount support",
+        "effort": "High",
+        "description": "Support multiple mounts on different device numbers"
+      },
+      {
+        "priority": 8,
+        "task": "Add Camera device",
+        "effort": "Very High",
+        "description": "Implement ICamera interface for imaging devices"
+      },
+      {
+        "priority": 9,
+        "task": "Add Dome device",
+        "effort": "High",
+        "description": "Implement IDome interface for observatory dome control"
+      }
+    ]
+  },
+  "metadata": {
+    "created": "2025-10-08",
+    "format_version": "1.0",
+    "conversation_context": "Complete OnStepX Alpaca Bridge implementation with all issues resolved"
+  }
+}
