@@ -1,0 +1,288 @@
+{
+  "project": {
+    "name": "OnStepX Alpaca Bridge with Cameras",
+    "goal": "ASCOM Alpaca REST API bridge for OnStepX mount + ZWO ASI + ToupTek cameras on Raspberry Pi",
+    "status": "Complete telescope + dual camera implementation"
+  },
+  "architecture": {
+    "flow": "Computer (Alpaca Client) → Network → Raspberry Pi (Flask) → USB → Mount/Cameras",
+    "devices": {
+      "telescope": {"type": "telescope", "device_number": 0, "hardware": "OnStepX", "interface": "USB Serial"},
+      "camera_zwo": {"type": "camera", "device_number": 0, "hardware": "ZWO ASI", "interface": "USB"},
+      "camera_touptek": {"type": "camera", "device_number": 1, "hardware": "ToupTek", "interface": "USB"}
+    },
+    "server": {
+      "framework": "Flask Python 3",
+      "port": 5555,
+      "host": "0.0.0.0"
+    }
+  },
+  "camera_implementation": {
+    "interfaces": "ICamera V4 (ASCOM Platform 7)",
+    "sdks": {
+      "zwo": {
+        "library": "zwoasi",
+        "sdk_file": "/usr/local/lib/libASICamera2.so",
+        "install": "pip install zwoasi",
+        "features": ["cooling", "high_speed", "ST4_port", "USB3"]
+      },
+      "touptek": {
+        "library": "toupcam",
+        "sdk_file": "/usr/local/lib/libtoupcam.so",
+        "install": "pip install git+https://github.com/NMGRL/toupcam.git",
+        "features": ["variable_resolution", "raw_mode"]
+      }
+    },
+    "endpoints_per_camera": {
+      "properties": [
+        "connected", "connecting", "camerastate", "cameraxsize", "cameraysize",
+        "binx", "biny", "maxbinx", "maxbiny", "canasymmetricbin",
+        "startx", "starty", "numx", "numy",
+        "sensortype", "sensorname", "bayeroffsetx", "bayeroffsety",
+        "pixelsizex", "pixelsizey", "imageready", "imagearray", "imagearrayvariant",
+        "lastexposureduration", "lastexposurestarttime", "percentcompleted",
+        "exposuremin", "exposuremax", "exposureresolution",
+        "gain", "gainmin", "gainmax", "gains",
+        "offset", "offsetmin", "offsetmax", "offsets",
+        "ccdtemperature", "cooleron", "coolerpower", "heatsinktemperature", "setccdtemperature",
+        "canabortexposure", "canstopexposure", "canpulseguide", "cansetccdtemperature",
+        "cangetcoolerpower", "hasshutter", "canfastreadout",
+        "readoutmode", "readoutmodes", "maxadu", "electronsperadu", "fullwellcapacity"
+      ],
+      "methods": [
+        "startexposure (PUT) - Duration, Light params",
+        "abortexposure (PUT)",
+        "stopexposure (PUT)",
+        "pulseguide (PUT) - Direction, Duration params"
+      ]
+    },
+    "image_transfer": {
+      "method": "imagearrayvariant with Base64 encoding",
+      "format": "UInt16, Rank 2, with metadata",
+      "efficiency": "~1.33x data size vs 4x for JSON arrays",
+      "alternative": "imagearray (JSON 2D array, slower)"
+    },
+    "camera_features": {
+      "zwo_specific": {
+        "cooling": true,
+        "target_temp_range": [-40, 30],
+        "cooler_power_read": true,
+        "high_speed_mode": true,
+        "gain_range": [0, 570],
+        "offset_range": [0, 80],
+        "supported_bins": [1, 2, 3, 4]
+      },
+      "touptek_specific": {
+        "cooling": "model dependent",
+        "gain_range": [0, 100],
+        "multiple_resolutions": true,
+        "auto_white_balance": true,
+        "temperature_readback": true
+      }
+    },
+    "exposure_workflow": {
+      "async_pattern": true,
+      "states": [
+        "cameraIdle (0)",
+        "cameraWaiting (1)",
+        "cameraExposing (2)",
+        "cameraReading (3)",
+        "cameraDownload (4)",
+        "cameraError (5)"
+      ],
+      "monitoring": "Use camerastate, percentcompleted, imageready properties",
+      "abort_anytime": true
+    }
+  },
+  "installation": {
+    "additional_dependencies": {
+      "system": [
+        "libusb-1.0-0-dev",
+        "libgl1-mesa-glx",
+        "libglib2.0-dev"
+      ],
+      "python": [
+        "numpy",
+        "zwoasi",
+        "toupcam (from GitHub)"
+      ]
+    },
+    "camera_sdk_install": {
+      "zwo": [
+        "Download from https://www.zwoastro.com/software/",
+        "Extract SDK",
+        "Copy libASICamera2.so to /usr/local/lib/",
+        "Install udev rules: asi.rules to /etc/udev/rules.d/",
+        "Reload: sudo udevadm control --reload-rules",
+        "Add user to plugdev group"
+      ],
+      "touptek": [
+        "Download from https://touptek-astro.com/download",
+        "Copy libtoupcam.so to /usr/local/lib/",
+        "Run sudo ldconfig",
+        "Install Python binding from GitHub"
+      ]
+    },
+    "verification": {
+      "zwo_test": "python3 -c 'import zwoasi as asi; asi.init(\"/usr/local/lib/libASICamera2.so\"); print(f\"Found {asi.get_num_cameras()} cameras\")'",
+      "touptek_test": "python3 -c 'from toupcam import toupcam; arr = toupcam.Toupcam.EnumV2(); print(f\"Found {len(arr)} cameras\")'"
+    }
+  },
+  "usage_examples": {
+    "connect_camera": "PUT /api/v1/camera/0/connected with Connected=true",
+    "start_exposure": "PUT /api/v1/camera/0/startexposure with Duration=5.0, Light=true",
+    "check_progress": "GET /api/v1/camera/0/percentcompleted",
+    "check_ready": "GET /api/v1/camera/0/imageready",
+    "download_image": "GET /api/v1/camera/0/imagearrayvariant (returns Base64)",
+    "set_binning": "PUT /api/v1/camera/0/binx with BinX=2",
+    "set_gain": "PUT /api/v1/camera/0/gain with Gain=200",
+    "enable_cooling": "PUT /api/v1/camera/0/cooleron with CoolerOn=true",
+    "set_temp": "PUT /api/v1/camera/0/setccdtemperature with SetCCDTemperature=-10"
+  },
+  "testing": {
+    "clients": [
+      "N.I.N.A. (Nighttime Imaging 'N' Astronomy)",
+      "PHD2 (guiding)",
+      "SharpCap",
+      "ASCOM Conformance Universal",
+      "Python scripts with requests library"
+    ],
+    "nina_setup": [
+      "Equipment → Camera → Choose → ASCOM Camera",
+      "Select Alpaca → Discover",
+      "Choose Raspberry Pi server",
+      "Select Camera 0 (ZWO) or Camera 1 (ToupTek)"
+    ]
+  },
+  "performance": {
+    "zwo_asi294mc_pro": {
+      "resolution": "4144x2822 pixels",
+      "pixel_size": "4.63 microns",
+      "exposure_overhead": "~1 second",
+      "download_time_ethernet": "2-3 seconds for 16-bit image",
+      "total_5s_exposure": "~8-9 seconds"
+    },
+    "optimization": {
+      "use_imagearrayvariant": "4x faster than imagearray",
+      "binning": "Reduces data size by bin²",
+      "roi": "Reduces data by area ratio",
+      "network": "Use gigabit Ethernet for best speed"
+    }
+  },
+  "completed_implementation": {
+    "telescope": {
+      "status": "Complete",
+      "endpoints": 60,
+      "device_number": 0
+    },
+    "camera_zwo": {
+      "status": "Complete",
+      "endpoints": 45,
+      "device_number": 0,
+      "features": ["exposure", "binning", "roi", "gain", "offset", "cooling", "temperature"]
+    },
+    "camera_touptek": {
+      "status": "Complete",
+      "endpoints": 45,
+      "device_number": 1,
+      "features": ["exposure", "binning", "roi", "gain", "temperature_readonly"]
+    }
+  },
+  "not_implemented": {
+    "camera_features": [
+      "Fast readout modes (firmware dependent)",
+      "Pulse guiding (requires ST4 port on camera)",
+      "Sub-frame guide mode",
+      "Video/streaming mode",
+      "Hardware binning optimization",
+      "Gain preset names",
+      "Per-readout-mode gain/offset",
+      "Camera-specific actions via Action()"
+    ],
+    "other_devices": [
+      "FilterWheel - IFilterWheel interface",
+      "Focuser - IFocuser interface",
+      "Dome - IDome interface",
+      "Rotator - IRotator interface",
+      "ObservingConditions - Weather sensors",
+      "Switch - Power/aux control",
+      "SafetyMonitor - Safety monitoring"
+    ],
+    "advanced_features": [
+      "Plate solving integration",
+      "Auto-focus routines",
+      "Dithering coordination",
+      "Meridian flip coordination",
+      "Image calibration (darks/flats)",
+      "Sequence management",
+      "Multiple simultaneous exposures",
+      "Live stacking"
+    ]
+  },
+  "troubleshooting": {
+    "camera_not_found": [
+      "Check USB: lsusb should show camera",
+      "Verify SDK: ls -l /usr/local/lib/libASI* or libtoup*",
+      "Check imports: python3 -c 'import zwoasi'",
+      "Check permissions: user in plugdev group",
+      "Verify udev rules installed and reloaded"
+    ],
+    "slow_downloads": [
+      "Use imagearrayvariant not imagearray",
+      "Enable binning to reduce data",
+      "Use ROI for smaller frames",
+      "Check network speed (gigabit preferred)",
+      "Monitor CPU usage on Raspberry Pi"
+    ],
+    "exposure_fails": [
+      "Check camera state before starting",
+      "Verify gain/offset in valid range",
+      "Check available disk space for images",
+      "Monitor temperature if using cooler",
+      "Check USB power (use powered hub if needed)"
+    ]
+  },
+  "file_structure": {
+    "main_server": "/home/pi/onstepx-alpaca/onstepx_alpaca_cameras.py",
+    "telescope_module": "/home/pi/onstepx-alpaca/onstepx_mount.py",
+    "camera_zwo_class": "ZWOCamera class in main server",
+    "camera_touptek_class": "ToupTekCamera class in main server",
+    "systemd_service": "/etc/systemd/system/onstepx-alpaca.service"
+  },
+  "next_steps": {
+    "priority_1": {
+      "task": "Add FilterWheel support",
+      "device_numbers": "0-3 for filter wheels",
+      "common_brands": "ZWO EFW, QHYCFW, Manual",
+      "effort": "Medium"
+    },
+    "priority_2": {
+      "task": "Add Focuser support",
+      "device_numbers": "0-3 for focusers",
+      "common_brands": "Moonlite, Pegasus, ZWO EAF",
+      "effort": "Medium"
+    },
+    "priority_3": {
+      "task": "Implement pulse guiding on cameras with ST4 port",
+      "requires": "ST4 port capability detection",
+      "effort": "Low"
+    },
+    "priority_4": {
+      "task": "Add web dashboard",
+      "features": ["device status", "live preview", "configuration", "logs"],
+      "effort": "High"
+    },
+    "priority_5": {
+      "task": "Multi-camera simultaneous exposure",
+      "benefit": "Parallel imaging/guiding",
+      "effort": "Medium"
+    }
+  },
+  "metadata": {
+    "created": "2025-10-08",
+    "updated": "2025-10-08",
+    "format_version": "2.0",
+    "devices_supported": 3,
+    "total_endpoints": 150
+  }
+}
