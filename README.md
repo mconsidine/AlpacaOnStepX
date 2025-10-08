@@ -14,3 +14,5 @@ The markdown files provide overview and additional info.
 ASCOM/Alpaca api description link: https://ascom-standards.org/api/
 
 mconsidine
+
+Copyrights are the property of their respective owners
