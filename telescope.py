@@ -1391,4 +1391,5 @@ class OnStepXMount:
     # Stop tracking
     telescope.move_axis(TelescopeAxes.axisPrimary, 0)
     telescope.move_axis(TelescopeAxes.axisSecondary, 0)
+    """
 
