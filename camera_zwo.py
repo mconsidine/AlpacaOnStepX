@@ -342,3 +342,15 @@ class ZWOCamera:
             self.set_ccd_temperature = temperature
         except Exception as e:
             raise RuntimeError(f"Failed to set temperature: {e}")
+            
+    def supported_actions(self):
+        """ZWO/ToupTek specific actions"""
+        return [
+            "SetCoolerPower",      # Set cooler power percentage
+            "GetCoolerPower",      # Get current cooler power
+            "SetFanSpeed",         # Set fan speed (if supported)
+            "SetUSBBandwidth",     # Adjust USB bandwidth
+            "GetUSBBandwidth",     # Query USB bandwidth
+            "SetHighSpeedMode"     # Toggle high speed mode
+        ]
+

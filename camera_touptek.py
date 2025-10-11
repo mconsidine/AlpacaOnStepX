@@ -9,7 +9,7 @@ from threading import Lock, Thread
 from enum import IntEnum
 
 try:
-    from toupcam import toupcam
+    from toupcam import Toupcam as toupcam
     TOUPTEK_AVAILABLE = True
 except ImportError:
     TOUPTEK_AVAILABLE = False
@@ -289,3 +289,15 @@ class ToupTekCamera:
         # ToupTek temperature control varies by model
         # This is a placeholder
         self.set_ccd_temperature = temperature
+
+    def supported_actions(self):
+        """ZWO/ToupTek specific actions"""
+        return [
+            "SetCoolerPower",      # Set cooler power percentage
+            "GetCoolerPower",      # Get current cooler power
+            "SetFanSpeed",         # Set fan speed (if supported)
+            "SetUSBBandwidth",     # Adjust USB bandwidth
+            "GetUSBBandwidth",     # Query USB bandwidth
+            "SetHighSpeedMode"     # Toggle high speed mode
+        ]
+
